@@ -1,19 +1,18 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 import mysql.connector
 from fastapi.middleware.cors import CORSMiddleware
 import os
+
 app = FastAPI()
-
-
 
 # ======================================================
 # CORS POLICY
 # ======================================================
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],     # Allow All Frontends
+    allow_origins=["*"],
     allow_credentials=True,
-    allow_methods=["*"],     # GET, POST, PUT, DELETE
+    allow_methods=["*"],
     allow_headers=["*"]
 )
 
@@ -28,11 +27,9 @@ conn = mysql.connector.connect(
 
 cursor = conn.cursor(dictionary=True)
 
-
-
 # -------------------- Create Table --------------------
 cursor.execute("""
-CREATE TABLE IF NOT EXISTS expenses(
+CREATE TABLE IF NOT EXISTS expenses (
     expense_id INT AUTO_INCREMENT PRIMARY KEY,
     title VARCHAR(200),
     amount FLOAT,
@@ -45,12 +42,14 @@ CREATE TABLE IF NOT EXISTS expenses(
 
 conn.commit()
 
+
+# -------------------- Home --------------------
 @app.get("/")
 def home():
-
     return {
         "message": "API Running Successfully"
     }
+
 
 # -------------------- Add Expense --------------------
 @app.post("/add_expense")
@@ -59,16 +58,16 @@ def add_expense(payload: dict):
     query = """
     INSERT INTO expenses
     (title, amount, category, payment_method, expense_date, description)
-    VALUES (%s,%s,%s,%s,%s,%s)
+    VALUES (%s, %s, %s, %s, %s, %s)
     """
 
     values = (
-        data["title"],
-        data["amount"],
-        data["category"],
-        data["payment_method"],
-        data["expense_date"],
-        data["description"]
+        payload["title"],
+        payload["amount"],
+        payload["category"],
+        payload["payment_method"],
+        payload["expense_date"],
+        payload["description"]
     )
 
     cursor.execute(query, values)
@@ -90,14 +89,11 @@ def get_expenses():
     """
 
     cursor.execute(query)
-
     data = cursor.fetchall()
 
     return {
         "expenses": data
     }
-
-
 
 
 # -------------------- Get Single Expense --------------------
@@ -111,22 +107,26 @@ def get_single_expense(expense_id: int):
     """
 
     cursor.execute(query, (expense_id,))
-
     data = cursor.fetchone()
 
-    if data:
-        return {
-            "expense": data
-        }
+    if not data:
+        raise HTTPException(status_code=404, detail="Expense Not Found")
 
     return {
-        "message": "Expense Not Found"
+        "expense": data
     }
 
 
 # -------------------- Update Expense --------------------
 @app.put("/update_expense/{expense_id}")
 def update_expense(expense_id: int, payload: dict):
+
+    check_query = "SELECT * FROM expenses WHERE expense_id=%s"
+    cursor.execute(check_query, (expense_id,))
+    existing = cursor.fetchone()
+
+    if not existing:
+        raise HTTPException(status_code=404, detail="Expense Not Found")
 
     query = """
     UPDATE expenses
@@ -141,12 +141,12 @@ def update_expense(expense_id: int, payload: dict):
     """
 
     values = (
-        data["title"],
-        data["amount"],
-        data["category"],
-        data["payment_method"],
-        data["expense_date"],
-        data["description"],
+        payload["title"],
+        payload["amount"],
+        payload["category"],
+        payload["payment_method"],
+        payload["expense_date"],
+        payload["description"],
         expense_id
     )
 
@@ -158,11 +158,16 @@ def update_expense(expense_id: int, payload: dict):
     }
 
 
-
-
 # -------------------- Delete Expense --------------------
 @app.delete("/delete_expense/{expense_id}")
 def delete_expense(expense_id: int):
+
+    check_query = "SELECT * FROM expenses WHERE expense_id=%s"
+    cursor.execute(check_query, (expense_id,))
+    existing = cursor.fetchone()
+
+    if not existing:
+        raise HTTPException(status_code=404, detail="Expense Not Found")
 
     query = """
     DELETE FROM expenses
@@ -177,7 +182,6 @@ def delete_expense(expense_id: int):
     }
 
 
-
 # -------------------- Expense Summary --------------------
 @app.get("/expense_summary")
 def expense_summary():
@@ -185,13 +189,12 @@ def expense_summary():
     query = """
     SELECT
         category,
-        SUM(amount) as total_amount
+        SUM(amount) AS total_amount
     FROM expenses
     GROUP BY category
     """
 
     cursor.execute(query)
-
     data = cursor.fetchall()
 
     return {
