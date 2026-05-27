@@ -1,137 +1,199 @@
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
+from fastapi import FastAPI
 import mysql.connector
-from fastapi.responses import StreamingResponse
-import pandas as pd
-import io
-
+from fastapi.middleware.cors import CORSMiddleware
+import os
 app = FastAPI()
 
-db = mysql.connector.connect(
-    host="localhost",
-    user="root",
-    password="root",
-    database="expense_tracker"
+
+
+# ======================================================
+# CORS POLICY
+# ======================================================
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],     # Allow All Frontends
+    allow_credentials=True,
+    allow_methods=["*"],     # GET, POST, PUT, DELETE
+    allow_headers=["*"]
 )
 
-cursor = db.cursor(dictionary=True)
+# -------------------- DB Connection --------------------
+conn = mysql.connector.connect(
+    host=os.getenv("db_host"),
+    user=os.getenv("db_user"),
+    password=os.getenv("db_password"),
+    database=os.getenv("db_name"),
+    port=int(os.getenv("db_port"))
+)
 
-class Expense(BaseModel):
-    title: str
-    amount: float
-    category: str
+cursor = conn.cursor(dictionary=True)
+
+
+
+# -------------------- Create Table --------------------
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS expenses(
+    expense_id INT AUTO_INCREMENT PRIMARY KEY,
+    title VARCHAR(200),
+    amount FLOAT,
+    category VARCHAR(100),
+    payment_method VARCHAR(100),
+    expense_date DATE,
+    description TEXT
+)
+""")
+
+conn.commit()
 
 @app.get("/")
 def home():
-    return {"message": "Expense Tracker Backend Running"}
 
-@app.post("/expenses")
-def add_expense(expense: Expense):
-    query = """
-    INSERT INTO expenses (title, amount, category)
-    VALUES (%s, %s, %s)
-    """
-    cursor.execute(query, (expense.title, expense.amount, expense.category))
-    db.commit()
-    return {"message": "Expense added successfully"}
-
-@app.get("/expenses")
-def get_expenses():
-    cursor.execute("SELECT * FROM expenses")
-    return cursor.fetchall()
-
-@app.get("/expenses/{expense_id}")
-def get_single_expense(expense_id: int):
-    cursor.execute("SELECT * FROM expenses WHERE expense_id=%s", (expense_id,))
-    data = cursor.fetchone()
-
-    if not data:
-        raise HTTPException(status_code=404, detail="Expense not found")
-
-    return data
-
-@app.put("/expenses/{expense_id}")
-def update_expense(expense_id: int, expense: Expense):
-    query = """
-    UPDATE expenses
-    SET title=%s, amount=%s, category=%s
-    WHERE expense_id=%s
-    """
-    cursor.execute(query, (expense.title, expense.amount, expense.category, expense_id))
-    db.commit()
-
-    if cursor.rowcount == 0:
-        raise HTTPException(status_code=404, detail="Expense not found")
-
-    return {"message": "Expense updated successfully"}
-
-@app.delete("/expenses/{expense_id}")
-def delete_expense(expense_id: int):
-    cursor.execute("DELETE FROM expenses WHERE expense_id=%s", (expense_id,))
-    db.commit()
-
-    if cursor.rowcount == 0:
-        raise HTTPException(status_code=404, detail="Expense not found")
-
-    return {"message": "Expense deleted successfully"}
-
-@app.get("/search")
-def search_expense(category: str):
-    cursor.execute("SELECT * FROM expenses WHERE category=%s", (category,))
-    return cursor.fetchall()
-
-@app.get("/sort")
-def sort_expenses(sort_by: str):
-    valid_sorts = {
-        "date_desc": "created_at DESC",
-        "date_asc": "created_at ASC",
-        "price_desc": "amount DESC",
-        "price_asc": "amount ASC"
+    return {
+        "message": "API Running Successfully"
     }
 
-    if sort_by not in valid_sorts:
-        raise HTTPException(status_code=400, detail="Invalid sort option")
+# -------------------- Add Expense --------------------
+@app.post("/add_expense")
+def add_expense(payload: dict):
 
-    query = f"SELECT * FROM expenses ORDER BY {valid_sorts[sort_by]}"
-    cursor.execute(query)
-    return cursor.fetchall()
-
-@app.get("/monthly-summary")
-def monthly_summary():
     query = """
-    SELECT MONTH(created_at) as month,
-           SUM(amount) as total
-    FROM expenses
-    GROUP BY MONTH(created_at)
+    INSERT INTO expenses
+    (title, amount, category, payment_method, expense_date, description)
+    VALUES (%s,%s,%s,%s,%s,%s)
     """
-    cursor.execute(query)
-    return cursor.fetchall()
 
-@app.get("/category-summary")
-def category_summary():
+    values = (
+        data["title"],
+        data["amount"],
+        data["category"],
+        data["payment_method"],
+        data["expense_date"],
+        data["description"]
+    )
+
+    cursor.execute(query, values)
+    conn.commit()
+
+    return {
+        "message": "Expense Added Successfully"
+    }
+
+
+# -------------------- Get All Expenses --------------------
+@app.get("/get_expenses")
+def get_expenses():
+
     query = """
-    SELECT category,
-           SUM(amount) as total
+    SELECT *
+    FROM expenses
+    ORDER BY expense_id DESC
+    """
+
+    cursor.execute(query)
+
+    data = cursor.fetchall()
+
+    return {
+        "expenses": data
+    }
+
+
+
+
+# -------------------- Get Single Expense --------------------
+@app.get("/get_single_expense/{expense_id}")
+def get_single_expense(expense_id: int):
+
+    query = """
+    SELECT *
+    FROM expenses
+    WHERE expense_id = %s
+    """
+
+    cursor.execute(query, (expense_id,))
+
+    data = cursor.fetchone()
+
+    if data:
+        return {
+            "expense": data
+        }
+
+    return {
+        "message": "Expense Not Found"
+    }
+
+
+# -------------------- Update Expense --------------------
+@app.put("/update_expense/{expense_id}")
+def update_expense(expense_id: int, payload: dict):
+
+    query = """
+    UPDATE expenses
+    SET
+        title=%s,
+        amount=%s,
+        category=%s,
+        payment_method=%s,
+        expense_date=%s,
+        description=%s
+    WHERE expense_id=%s
+    """
+
+    values = (
+        data["title"],
+        data["amount"],
+        data["category"],
+        data["payment_method"],
+        data["expense_date"],
+        data["description"],
+        expense_id
+    )
+
+    cursor.execute(query, values)
+    conn.commit()
+
+    return {
+        "message": "Expense Updated Successfully"
+    }
+
+
+
+
+# -------------------- Delete Expense --------------------
+@app.delete("/delete_expense/{expense_id}")
+def delete_expense(expense_id: int):
+
+    query = """
+    DELETE FROM expenses
+    WHERE expense_id=%s
+    """
+
+    cursor.execute(query, (expense_id,))
+    conn.commit()
+
+    return {
+        "message": "Expense Deleted Successfully"
+    }
+
+
+
+# -------------------- Expense Summary --------------------
+@app.get("/expense_summary")
+def expense_summary():
+
+    query = """
+    SELECT
+        category,
+        SUM(amount) as total_amount
     FROM expenses
     GROUP BY category
     """
-    cursor.execute(query)
-    return cursor.fetchall()
 
-@app.get("/export")
-def export_csv():
-    cursor.execute("SELECT * FROM expenses")
+    cursor.execute(query)
+
     data = cursor.fetchall()
 
-    df = pd.DataFrame(data)
-
-    stream = io.StringIO()
-    df.to_csv(stream, index=False)
-
-    response = StreamingResponse(
-        iter([stream.getvalue()]),
-        media_type="text/csv"
-    )
-
-    response.headers["Content-Disposition"] = "attachment; filename=expenses.csv"
-    return response
+    return {
+        "summary": data
+    }
