@@ -5,9 +5,9 @@ import os
 
 app = FastAPI()
 
-# ======================================================
+
 # CORS POLICY
-# ======================================================
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -16,7 +16,7 @@ app.add_middleware(
     allow_headers=["*"]
 )
 
-# -------------------- DB Connection --------------------
+# DB Connection 
 conn = mysql.connector.connect(
     host=os.getenv("db_host"),
     user=os.getenv("db_user"),
@@ -27,7 +27,7 @@ conn = mysql.connector.connect(
 
 cursor = conn.cursor(dictionary=True)
 
-# -------------------- Create Table --------------------
+# Create Table 
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS expenses (
     expense_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -43,7 +43,7 @@ CREATE TABLE IF NOT EXISTS expenses (
 conn.commit()
 
 
-# -------------------- Home --------------------
+#Home 
 @app.get("/")
 def home():
     return {
@@ -51,7 +51,7 @@ def home():
     }
 
 
-# -------------------- Add Expense --------------------
+#Add Expense
 @app.post("/add_expense")
 def add_expense(payload: dict):
 
@@ -78,7 +78,7 @@ def add_expense(payload: dict):
     }
 
 
-# -------------------- Get All Expenses --------------------
+# Get All Expenses
 @app.get("/get_expenses")
 def get_expenses():
 
@@ -96,7 +96,7 @@ def get_expenses():
     }
 
 
-# -------------------- Get Single Expense --------------------
+#  Get Single Expense 
 @app.get("/get_single_expense/{expense_id}")
 def get_single_expense(expense_id: int):
 
@@ -117,7 +117,7 @@ def get_single_expense(expense_id: int):
     }
 
 
-# -------------------- Update Expense --------------------
+# Update Expense 
 @app.put("/update_expense/{expense_id}")
 def update_expense(expense_id: int, payload: dict):
 
@@ -158,7 +158,7 @@ def update_expense(expense_id: int, payload: dict):
     }
 
 
-# -------------------- Delete Expense --------------------
+# Delete Expense
 @app.delete("/delete_expense/{expense_id}")
 def delete_expense(expense_id: int):
 
@@ -182,7 +182,7 @@ def delete_expense(expense_id: int):
     }
 
 
-# -------------------- Expense Summary --------------------
+# Expense Summary
 @app.get("/expense_summary")
 def expense_summary():
 

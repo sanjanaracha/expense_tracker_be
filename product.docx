@@ -1,0 +1,746 @@
+# Expense Tracker Backend Documentation
+
+# 1. Project Title
+
+Expense Tracker Backend API
+
+---
+
+# 2. Introduction
+
+The Expense Tracker Backend API is developed using FastAPI and MySQL. 
+It provides RESTful APIs for managing expenses including:
+
+* Adding expenses
+* Viewing expenses
+* Updating expenses
+* Deleting expenses
+* Viewing category-wise summaries
+
+The backend communicates with the frontend application using
+ HTTP requests and stores data in a MySQL database.
+
+---
+
+# 3. Technologies Used
+
+| Technology             | Purpose                        |
+| ---------------------- | ------------------------------ |
+| Python                 | Programming Language           |
+| FastAPI                | Backend API Framework          |
+| MySQL                  | Database                       |
+| mysql-connector-python | MySQL Database Connectivity    |
+| Uvicorn                | ASGI Server                    |
+| CORS Middleware        | Frontend-Backend Communication |
+
+---
+
+# 4. Project Structure
+
+```plaintext id="d0a7pz"
+backend/
+│
+├── main.py
+├── requirements.txt
+└── .env
+```
+
+---
+
+# 5. Required Libraries
+
+Install dependencies using:
+
+```bash id="u5rkco"
+pip install -r requirements.txt
+```
+
+Example `requirements.txt`:
+
+```txt id="p3x4kn"
+fastapi
+uvicorn
+mysql-connector-python
+python-dotenv
+```
+
+---
+
+# 6. Environment Variables
+
+Database credentials are stored using environment variables.
+
+Example `.env` file:
+
+```env id="xyscbo"
+db_host=localhost
+db_user=root
+db_password=yourpassword
+db_database=expense_tracker
+db_port=3306
+```
+
+Accessed using:
+
+```python id="m5rzx7"
+os.getenv("db_host")
+```
+
+---
+
+# 7. FastAPI Application Initialization
+
+The FastAPI application is initialized using:
+
+```python id="jlwmr8"
+app = FastAPI()
+```
+
+Purpose:
+
+* Creates API application instance
+* Handles routes and requests
+
+---
+
+# 8. CORS Configuration
+
+CORS middleware is added to allow frontend applications to access backend APIs.
+
+```python id="gwz0uq"
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"]
+)
+```
+
+Purpose:
+
+* Enables frontend-backend communication
+* Prevents browser CORS errors
+
+---
+
+# 9. Database Connection
+
+MySQL database connection:
+
+```python id="yho7yr"
+conn = mysql.connector.connect(
+    host=os.getenv("db_host"),
+    user=os.getenv("db_user"),
+    password=os.getenv("db_password"),
+    database=os.getenv("db_database"),
+    port=int(os.getenv("db_port"))
+)
+```
+
+Cursor:
+
+```python id="l7k5wt"
+cursor = conn.cursor(dictionary=True)
+```
+
+Purpose:
+
+* Connects backend to MySQL database
+* Returns results in dictionary format
+
+---
+
+# 10. Database Table Creation
+
+Table creation query:
+
+```sql id="p21v73"
+CREATE TABLE IF NOT EXISTS expenses (
+    expense_id INT AUTO_INCREMENT PRIMARY KEY,
+    title VARCHAR(200),
+    amount FLOAT,
+    category VARCHAR(100),
+    payment_method VARCHAR(100),
+    expense_date DATE,
+    description TEXT
+)
+```
+
+Table Fields:
+
+| Column         | Data Type    | Description       |
+| -------------- | ------------ | ----------------- |
+| expense_id     | INT          | Unique Expense ID |
+| title          | VARCHAR(200) | Expense Title     |
+| amount         | FLOAT        | Expense Amount    |
+| category       | VARCHAR(100) | Expense Category  |
+| payment_method | VARCHAR(100) | Payment Type      |
+| expense_date   | DATE         | Expense Date      |
+| description    | TEXT         | Additional Notes  |
+
+---
+
+# 11. API Endpoints
+
+---
+
+# 11.1 Home API
+
+## Endpoint
+
+```http id="g5mhv0"
+GET /
+```
+
+## Purpose
+
+Checks whether API server is running.
+
+## Response
+
+```json id="ex7jqz"
+{
+  "message": "API Running Successfully"
+}
+```
+
+---
+
+# 11.2 Add Expense API
+
+## Endpoint
+
+```http id="jlwmxa"
+POST /add_expense
+```
+
+## Purpose
+
+Adds a new expense to database.
+
+## Request Body
+
+```json id="v8h2x0"
+{
+  "title": "Lunch",
+  "amount": 250,
+  "category": "Food",
+  "payment_method": "UPI",
+  "expense_date": "2026-05-28",
+  "description": "Lunch with friends"
+}
+```
+
+## Database Operation
+
+```sql id="mfhx1d"
+INSERT INTO expenses
+(title, amount, category, payment_method, expense_date, description)
+VALUES (%s, %s, %s, %s, %s, %s)
+```
+
+## Response
+
+```json id="vjlwm0"
+{
+  "message": "Expense Added Successfully"
+}
+```
+
+---
+
+# 11.3 Get All Expenses API
+
+## Endpoint
+
+```http id="v0ew3m"
+GET /get_expenses
+```
+
+## Purpose
+
+Fetches all expenses from database.
+
+## SQL Query
+
+```sql id="c6wj84"
+SELECT *
+FROM expenses
+ORDER BY expense_id DESC
+```
+
+## Response
+
+```json id="g2xk9t"
+{
+  "expenses": [
+    {
+      "expense_id": 1,
+      "title": "Lunch",
+      "amount": 250
+    }
+  ]
+}
+```
+
+---
+
+# 11.4 Get Single Expense API
+
+## Endpoint
+
+```http id="z6g0tq"
+GET /get_single_expense/{expense_id}
+```
+
+## Purpose
+
+Fetches one expense using Expense ID.
+
+## SQL Query
+
+```sql id="z0ov5k"
+SELECT *
+FROM expenses
+WHERE expense_id = %s
+```
+
+## Error Handling
+
+If expense does not exist:
+
+```python id="jd1rgn"
+raise HTTPException(status_code=404, detail="Expense Not Found")
+```
+
+---
+
+# 11.5 Update Expense API
+
+## Endpoint
+
+```http id="zwq83h"
+PUT /update_expense/{expense_id}
+```
+
+## Purpose
+
+Updates an existing expense.
+
+## Process
+
+1. Check whether expense exists
+2. Update database record
+3. Commit changes
+
+## SQL Query
+
+```sql id="lqcfw0"
+UPDATE expenses
+SET
+    title=%s,
+    amount=%s,
+    category=%s,
+    payment_method=%s,
+    expense_date=%s,
+    description=%s
+WHERE expense_id=%s
+```
+
+## Response
+
+```json id="pl0ks6"
+{
+  "message": "Expense Updated Successfully"
+}
+```
+
+---
+
+# 11.6 Delete Expense API
+
+## Endpoint
+
+```http id="zkp1tw"
+DELETE /delete_expense/{expense_id}
+```
+
+## Purpose
+
+Deletes expense from database.
+
+## SQL Query
+
+```sql id="tjlwm2"
+DELETE FROM expenses
+WHERE expense_id=%s
+```
+
+## Response
+
+```json id="kw7q5m"
+{
+  "message": "Expense Deleted Successfully"
+}
+```
+
+---
+
+# 11.7 Expense Summary API
+
+## Endpoint
+
+```http id="m2r0oz"
+GET /expense_summary
+```
+
+## Purpose
+
+Returns category-wise total expenses.
+
+## SQL Query
+
+```sql id="kh8l2q"
+SELECT
+    category,
+    SUM(amount) AS total_amount
+FROM expenses
+GROUP BY category
+```
+
+## Example Response
+
+```json id="s7m4pb"
+{
+  "summary": [
+    {
+      "category": "Food",
+      "total_amount": 2000
+    }
+  ]
+}
+```
+
+---
+
+# 12. Error Handling
+
+The backend uses FastAPI HTTP exceptions:
+
+```python id="s8yn8d"
+raise HTTPException(status_code=404, detail="Expense Not Found")
+```
+
+Purpose:
+
+* Returns meaningful API errors
+* Improves debugging
+* Handles invalid requests
+
+---
+
+# 13. Running the Backend Server
+
+## Step 1: Install Dependencies
+
+```bash id="pqqvh1"
+pip install -r requirements.txt
+```
+
+## Step 2: Start Server
+
+```bash id="h5u7l0"
+uvicorn main:app --reload
+```
+
+---
+
+# 14. API Testing
+
+The APIs can be tested using:
+
+* FastAPI Swagger UI
+* Postman
+* Frontend Application
+
+Swagger Documentation:
+
+```plaintext id="bbj3sp"
+http://127.0.0.1:8000/docs
+```
+
+---
+
+# 15. Features of the Backend
+
+* REST API Architecture
+* CRUD Operations
+* MySQL Database Integration
+* CORS Enabled
+* Dynamic Expense Management
+* Category-wise Summary
+* Exception Handling
+
+---
+
+# 16. Future Enhancements
+
+Possible improvements:
+
+* JWT Authentication
+* User Login System
+* Expense Filters
+* Monthly Reports
+* Export APIs
+* Cloud Database Integration
+* Docker Deployment
+* AI-Based Expense Analytics
+
+---
+
+# 17. Conclusion
+
+The Expense Tracker Backend API provides a robust and scalable backend 
+solution for managing expenses. Using FastAPI and MySQL, the application demonstrates 
+database connectivity, RESTful APIs, CRUD operations, and frontend-backend integration 
+efficiently.
+
+
+# Updated Backend Deployment Section — Render.com
+
+# 18. Backend Deployment Using Render.com
+
+The Expense Tracker Backend API is deployed using Render, which provides cloud hosting for web services and APIs.
+
+---
+
+# 18.1 Prerequisites
+
+Before deployment, ensure the following:
+
+* Backend project uploaded to GitHub
+* `main.py` file available
+* `requirements.txt` configured correctly
+* MySQL database created
+* Environment variables prepared
+
+---
+
+# 18.2 Required Files
+
+Project structure:
+
+```plaintext id="4lq4i9"
+backend/
+│
+├── main.py
+├── requirements.txt
+└── .env
+```
+
+---
+
+# 18.3 requirements.txt
+
+Example:
+
+```txt id="7osxt1"
+fastapi
+uvicorn
+mysql-connector-python
+python-dotenv
+```
+
+---
+
+# 18.4 Environment Variables
+
+Database credentials are stored securely using Render Environment Variables.
+
+Required Variables:
+
+```env id="jtb9v2"
+db_host=your_host
+db_user=your_username
+db_password=your_password
+db_database=your_database
+db_port=3306
+```
+
+Accessed in code using:
+
+```python id="a4v2pl"
+os.getenv("db_host")
+```
+
+---
+
+# 18.5 Deployment Steps
+
+## Step 1: Push Code to GitHub
+
+Upload backend files to a GitHub repository.
+
+---
+
+## Step 2: Open Render Dashboard
+
+Visit:
+
+[https://render.com/](https://render.com/)
+
+Login or create an account.
+
+---
+
+## Step 3: Create New Web Service
+
+Click:
+
+```plaintext id="jlwm66"
+New → Web Service
+```
+
+---
+
+## Step 4: Connect GitHub Repository
+
+* Select GitHub account
+* Choose backend repository
+* Connect repository to Render
+
+---
+
+## Step 5: Configure Deployment Settings
+
+### Basic Settings
+
+| Field          | Value                   |
+| -------------- | ----------------------- |
+| Name           | expense-tracker-backend |
+| Environment    | Python                  |
+| Branch         | main                    |
+| Root Directory | backend (if applicable) |
+
+---
+
+## Step 6: Build Command
+
+```bash id="b0fjlwm"
+pip install -r requirements.txt
+```
+
+---
+
+## Step 7: Start Command
+
+```bash id="jlwmk7"
+uvicorn main:app --host 0.0.0.0 --port 10000
+```
+
+---
+
+# 18.6 Add Environment Variables
+
+Go to:
+
+```plaintext id="j7txcf"
+Environment → Add Environment Variables
+```
+
+Add all database variables:
+
+```env id="if2jlwm"
+db_host=your_host
+db_user=your_username
+db_password=your_password
+db_database=your_database
+db_port=3306
+```
+
+---
+
+# 18.7 Deploy Application
+
+Click:
+
+```plaintext id="w94jlwm"
+Create Web Service
+```
+
+Render automatically:
+
+* Installs dependencies
+* Builds application
+* Starts FastAPI server
+* Generates public API URL
+
+---
+
+# 18.8 Deployment URL
+
+After successful deployment, Render provides a public URL such as:
+
+```plaintext id="q1jlwm"
+https://expense-tracker-backend.onrender.com
+```
+
+Example API:
+
+```plaintext id="jlwmz4"
+https://expense-tracker-backend.onrender.com/docs
+```
+
+
+# 18.9 Common Deployment Errors
+
+| Error                  | Reason                  | Solution                        |
+| ---------------------- | ----------------------- | ------------------------------- |
+| ModuleNotFoundError    | Missing package         | Add package to requirements.txt |
+| MySQL Connection Error | Invalid DB credentials  | Verify environment variables    |
+| App Crash              | Syntax/runtime error    | Check Render logs               |
+| Port Binding Error     | Incorrect start command | Use Render port configuration   |
+| CORS Error             | Frontend origin blocked | Verify CORS settings            |
+
+---
+
+# 18.10 Updating the Backend
+
+To update deployed backend:
+
+1. Modify backend code locally
+2. Push changes to GitHub
+3. Render automatically redeploys application
+
+---
+
+# 18.11 Benefits of Using Render
+
+Advantages:
+
+* Free hosting tier
+* Easy GitHub integration
+* Automatic deployments
+* Environment variable support
+* Live logs and monitoring
+* HTTPS enabled by default
+
+---
+
+# 18.12 Frontend-Backend Integration
+
+The frontend Streamlit application communicates with the deployed Render backend using:
+
+```python id="y0g9kz"
+server = st.secrets["be_server_url"]
+```
+
+Example:
+
+```toml id="jlwm8f"
+be_server_url = "https://expense-tracker-backend.onrender.com"
+```
+
+This enables secure API communication between frontend and backend applications.
+
